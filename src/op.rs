@@ -1,30 +1,10 @@
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum OpKind {
-    // Unary
-    Exp,
-    Log,
-    Sin,
-    Recip,        
-    Sqrt,
-
-    // Binary
-    Add,
-    Mul,
-    Mod,
-    LessThan,
-    
-    // Reduce
-    SumReduce,    
-    MaxReduce,    
-    
-    // Broadcast
-    Broadcast,    
-    Reshape,      
-    
-    // Constant
-    Constant,   
-
-    // Symbol
+    Exp, Log, Sin, Recip, Sqrt,
+    Add, Mul, Mod, LessThan,
+    SumReduce, MaxReduce,
+    Broadcast, Reshape,
+    Constant,
     Input(String),
 }
 

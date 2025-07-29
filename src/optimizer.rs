@@ -28,12 +28,7 @@ pub struct Optimizer {
 }
 
 impl Optimizer {
-    pub fn new() -> Self {
-        Optimizer {
-            rules: Self::create_rules(),
-            max_iterations: 20,
-        }
-    }
+    pub fn new() -> Self { Self { rules: Self::create_rules(), max_iterations: 20 } }
 
     fn create_rules() -> Vec<RewriteRule> {
         let mut rules = Vec::new();
@@ -625,6 +620,7 @@ impl Optimizer {
             },
             rhs: Pattern::var("a"),
         });
+        rules
     }
 
     pub fn optimize(&mut self, egraph: &mut EGraph, root_id: ENodeId) -> ENodeId {
@@ -781,20 +777,8 @@ impl Optimizer {
 }
 
 impl Pattern {
-    pub fn var(name: &str) -> Pattern {
-        Pattern {
-            root: PatternNode::Var(name.to_string())
-        }
-    }
-
-    pub fn constant(value: &str) -> Pattern {
-        Pattern {
-            root: PatternNode::Op(
-                TensorOp::Constant(value.to_string()),
-                vec![]
-            )
-        }
-    }
+    pub fn var(name: &str) -> Pattern { Pattern { root: PatternNode::Var(name.to_string()) } }
+    pub fn constant(value: &str) -> Pattern { Pattern { root: PatternNode::Op(TensorOp::Constant(value.to_string()), vec![]) } }
 
     pub fn binary_op(op: &str, left: impl Into<PatternNode>, right: impl Into<PatternNode>) -> Pattern {
         let op_template = match op {
@@ -841,15 +825,11 @@ impl Pattern {
 }
 
 impl From<&str> for PatternNode {
-    fn from(s: &str) -> Self {
-        PatternNode::Var(s.to_string())
-    }
+    fn from(s: &str) -> Self { PatternNode::Var(s.to_string()) }
 }
 
 impl From<Pattern> for PatternNode {
-    fn from(p: Pattern) -> Self {
-        p.root
-    }
+    fn from(p: Pattern) -> Self { p.root }
 }
 
 pub fn graph_to_egraph(graph: &Graph) -> (EGraph, ENodeId) {
@@ -1033,20 +1013,11 @@ fn build_graph_recursive(
 }
 
 pub fn optimize_with_egraph(graph: &Graph) -> Graph {
-    // Convert Graph to EGraph
     let (mut egraph, root_id) = graph_to_egraph(graph);
-    
-    // Create Optimizer and Run Optimization
-    let mut optimizer = Optimizer::new();
-    let optimized_root = optimizer.optimize(&mut egraph, root_id);
-    
-    // Convert Back to Graph
+    let optimized_root = Optimizer::new().optimize(&mut egraph, root_id);
     egraph_to_graph(&mut egraph, optimized_root, graph)
 }
 
-
 impl Default for Optimizer {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }

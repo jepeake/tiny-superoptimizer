@@ -4,37 +4,16 @@ use plotters::prelude::*;
 use plotters_bitmap::BitMapBackend;
 
 fn clean_name(name: &str) -> String {
-    name
-        .replace(" ", "_")
-        .replace("(", "")
-        .replace(")", "")
-        .replace("+", "plus")
-        .replace("*", "mul")
-        .replace("→", "to")
-        .replace("/", "_")
-        .replace(":", "_")
-        .replace("'", "")
-        .replace("\"", "")
-        .replace("&", "and")
-        .to_lowercase()
+    name.replace(" ", "_").replace("(", "").replace(")", "").replace("+", "plus")
+        .replace("*", "mul").replace("→", "to").replace("/", "_").replace(":", "_")
+        .replace("'", "").replace("\"", "").replace("&", "and").to_lowercase()
 }
 
 #[derive(Clone)]
-struct GraphNode {
-    id: usize,
-    name: String,
-    shape: Vec<usize>,
-    node_type: NodeType,
-    x: i32,
-    y: i32,
-}
+struct GraphNode { id: usize, name: String, shape: Vec<usize>, node_type: NodeType, x: i32, y: i32 }
 
 #[derive(Clone)]
-enum NodeType {
-    Input,
-    Output,
-    Operation(OpKind, usize),
-}
+enum NodeType { Input, Output, Operation(OpKind, usize) }
 
 fn layout_graph(graph: &Graph) -> (Vec<GraphNode>, Vec<(usize, usize)>) {
     let mut nodes = Vec::new();
@@ -88,22 +67,15 @@ fn layout_graph(graph: &Graph) -> (Vec<GraphNode>, Vec<(usize, usize)>) {
 }
 
 #[derive(Clone)]
-enum NodeInfo {
-    Input(usize),
-    Operation(usize),
-    Output,
-}
+enum NodeInfo { Input(usize), Operation(usize), Output }
 
 fn create_layered_layout(graph: &Graph) -> Vec<Vec<(usize, NodeInfo)>> {
     let mut layers: Vec<Vec<(usize, NodeInfo)>> = Vec::new();
     
-    let mut input_layer = Vec::new();
-    for (i, tensor) in graph.tensors.iter().enumerate() {
-        if !tensor.name.starts_with("tmp_") {
-            input_layer.push((i, NodeInfo::Input(i)));
-        }
-    }
-    layers.push(input_layer);
+    layers.push(graph.tensors.iter().enumerate()
+        .filter(|(_, t)| !t.name.starts_with("tmp_"))
+        .map(|(i, _)| (i, NodeInfo::Input(i)))
+        .collect());
     
     let mut op_layers: Vec<Vec<usize>> = Vec::new();
     let mut remaining_ops: Vec<usize> = (0..graph.ops.len()).collect();
@@ -439,8 +411,8 @@ where
 pub fn generate_graph_image(graph: &Graph, name: &str, suffix: &str) -> Result<String, Box<dyn std::error::Error>> {
     let clean_filename = format!("results/{}{}.png", clean_name(name), suffix);
     let (nodes, edges) = layout_graph(graph);
-    let filename_clone = clean_filename.clone();
-    let root = BitMapBackend::new(&filename_clone, (800, 600)).into_drawing_area();
+    let filename_for_backend = clean_filename.clone();
+    let root = BitMapBackend::new(&filename_for_backend, (800, 600)).into_drawing_area();
     root.fill(&WHITE)?;
     
     for (from_id, to_id) in edges {

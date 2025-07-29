@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-
 pub type ENodeId = usize;
 
 /// Shape & Attribute Information for Tensor Operations
@@ -11,43 +10,17 @@ pub struct ShapeInfo {
 }
 
 impl ShapeInfo {
-    pub fn new(shape: Vec<usize>, attrs: Vec<i64>) -> Self {
-        ShapeInfo { shape, attrs }
-    }
-    
-    pub fn unknown() -> Self {
-        ShapeInfo { shape: vec![], attrs: vec![] }
-    }
+    pub fn new(shape: Vec<usize>, attrs: Vec<i64>) -> Self { Self { shape, attrs } }
+    pub fn unknown() -> Self { Self { shape: vec![], attrs: vec![] } }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TensorOp {
-    // Unary
-    Exp(ENodeId),
-    Log(ENodeId),
-    Sin(ENodeId),
-    Recip(ENodeId),        
-    Sqrt(ENodeId),
-
-    // Binary
-    Add(ENodeId, ENodeId),
-    Mul(ENodeId, ENodeId),
-    Mod(ENodeId, ENodeId),
-    LessThan(ENodeId, ENodeId),
-    
-    // Reduce   
-    SumReduce(ENodeId, Vec<i64>),    
-    MaxReduce(ENodeId, Vec<i64>),    
-    
-    // Broadcast
-    Broadcast(ENodeId, ENodeId),  
-    Reshape(ENodeId, Vec<i64>),      
-    
-    // Constant
-    Constant(String),  
-    
-    // Symbol 
-    Symbol(String, ShapeInfo),
+    Exp(ENodeId), Log(ENodeId), Sin(ENodeId), Recip(ENodeId), Sqrt(ENodeId),
+    Add(ENodeId, ENodeId), Mul(ENodeId, ENodeId), Mod(ENodeId, ENodeId), LessThan(ENodeId, ENodeId),
+    SumReduce(ENodeId, Vec<i64>), MaxReduce(ENodeId, Vec<i64>),
+    Broadcast(ENodeId, ENodeId), Reshape(ENodeId, Vec<i64>),
+    Constant(String), Symbol(String, ShapeInfo),
     
     // Tree Variants for Reconstruction
     ExpTree(Box<TensorOp>),
@@ -69,43 +42,21 @@ pub enum TensorOp {
 impl fmt::Display for TensorOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            // Unary
             TensorOp::Exp(a) => write!(f, "(exp {})", a),
             TensorOp::Log(a) => write!(f, "(log {})", a),
             TensorOp::Sin(a) => write!(f, "(sin {})", a),
             TensorOp::Recip(a) => write!(f, "(recip {})", a),
             TensorOp::Sqrt(a) => write!(f, "(sqrt {})", a),
-
-            // Binary
             TensorOp::Add(a, b) => write!(f, "(+ {} {})", a, b),
             TensorOp::Mul(a, b) => write!(f, "(* {} {})", a, b),
             TensorOp::Mod(a, b) => write!(f, "(mod {} {})", a, b),
             TensorOp::LessThan(a, b) => write!(f, "(< {} {})", a, b),
 
-            // Reduce
-            TensorOp::SumReduce(a, axes) => {
-                if axes.is_empty() {
-                    write!(f, "(sum_reduce {})", a)
-                } else {
-                    write!(f, "(sum_reduce {} axis={:?})", a, axes)
-                }
-            },
-            TensorOp::MaxReduce(a, axes) => {
-                if axes.is_empty() {
-                    write!(f, "(max_reduce {})", a)
-                } else {
-                    write!(f, "(max_reduce {} axis={:?})", a, axes)
-                }
-            },
-
-            // Utility
+            TensorOp::SumReduce(a, axes) => if axes.is_empty() { write!(f, "(sum_reduce {})", a) } else { write!(f, "(sum_reduce {} axis={:?})", a, axes) },
+            TensorOp::MaxReduce(a, axes) => if axes.is_empty() { write!(f, "(max_reduce {})", a) } else { write!(f, "(max_reduce {} axis={:?})", a, axes) },
             TensorOp::Broadcast(a, b) => write!(f, "(broadcast {} {})", a, b),
             TensorOp::Reshape(a, new_shape) => write!(f, "(reshape {} {:?})", a, new_shape),
-
-            // Constant
             TensorOp::Constant(s) => write!(f, "(const {})", s),
-
-            // Symbol
             TensorOp::Symbol(s, _) => write!(f, "{}", s),
             
             // Tree Variants 
@@ -118,20 +69,8 @@ impl fmt::Display for TensorOp {
             TensorOp::MulTree(a, b) => write!(f, "(* {} {})", a, b),
             TensorOp::ModTree(a, b) => write!(f, "(mod {} {})", a, b),
             TensorOp::LessThanTree(a, b) => write!(f, "(< {} {})", a, b),
-            TensorOp::SumReduceTree(a, axes) => {
-                if axes.is_empty() {
-                    write!(f, "(sum_reduce {})", a)
-                } else {
-                    write!(f, "(sum_reduce {} axis={:?})", a, axes)
-                }
-            },
-            TensorOp::MaxReduceTree(a, axes) => {
-                if axes.is_empty() {
-                    write!(f, "(max_reduce {})", a)
-                } else {
-                    write!(f, "(max_reduce {} axis={:?})", a, axes)
-                }
-            },
+            TensorOp::SumReduceTree(a, axes) => if axes.is_empty() { write!(f, "(sum_reduce {})", a) } else { write!(f, "(sum_reduce {} axis={:?})", a, axes) },
+            TensorOp::MaxReduceTree(a, axes) => if axes.is_empty() { write!(f, "(max_reduce {})", a) } else { write!(f, "(max_reduce {} axis={:?})", a, axes) },
             TensorOp::BroadcastTree(a, b) => write!(f, "(broadcast {} {})", a, b),
             TensorOp::ReshapeTree(a, new_shape) => write!(f, "(reshape {} {:?})", a, new_shape),
             TensorOp::ConstantTree(s) => write!(f, "(const {})", s),
@@ -187,8 +126,6 @@ impl TensorOp {
             // Leaf
             TensorOp::Symbol(s, shape) => TensorOp::Symbol(s.clone(), shape.clone()),
             TensorOp::Constant(s) => TensorOp::Constant(s.clone()),
-            
-            // Tree Variants (Can't Have Children Replaced)
             tree_op => tree_op.clone(),
         }
     }
@@ -230,11 +167,7 @@ pub struct EClass {
 
 impl EClass {
     pub fn new(id: ENodeId) -> Self {
-        EClass {
-            id,
-            nodes: HashSet::new(),
-            parents: HashSet::new(),
-        }
+        Self { id, nodes: HashSet::new(), parents: HashSet::new() }
     }
 
     pub fn merge(&mut self, other: &EClass) {
@@ -252,11 +185,7 @@ pub struct EGraph {
 
 impl EGraph {
     pub fn new() -> Self {
-        EGraph {
-            eclasses: Vec::new(),
-            hashcons: HashMap::new(),
-            unionfind: Vec::new(),
-        }
+        Self { eclasses: Vec::new(), hashcons: HashMap::new(), unionfind: Vec::new() }
     }
 
     pub fn add(&mut self, op: TensorOp) -> ENodeId {
@@ -286,13 +215,8 @@ impl EGraph {
 
     fn canonicalize_op(&mut self, op: &TensorOp) -> TensorOp {
         let children = op.get_children();
-        let canonical_children: Vec<ENodeId> = children.iter().map(|&id| self.find(id)).collect();
-        
-        if children == canonical_children {
-            op.clone()
-        } else {
-            op.replace_children(&canonical_children)
-        }
+        let canonical_children: Vec<_> = children.iter().map(|&id| self.find(id)).collect();
+        if children == canonical_children { op.clone() } else { op.replace_children(&canonical_children) }
     }
 
     pub fn find(&mut self, mut id: ENodeId) -> ENodeId {
@@ -318,11 +242,7 @@ impl EGraph {
             return root1;
         }
 
-        let (smaller, larger) = if self.eclasses[root1].nodes.len() < self.eclasses[root2].nodes.len() {
-            (root1, root2)
-        } else {
-            (root2, root1)
-        };
+        let (smaller, larger) = if self.eclasses[root1].nodes.len() < self.eclasses[root2].nodes.len() { (root1, root2) } else { (root2, root1) };
 
         self.unionfind[smaller] = larger;
 
@@ -434,9 +354,7 @@ impl EGraph {
     }
 
     fn compute_tree_cost(&self, op: &TensorOp) -> usize {
-        match op {
-            _ => op.cost()
-        }
+        op.cost()
     }
 
     fn rebuild_op_with_tree_children(&self, op: &TensorOp, tree_children: &[TensorOp]) -> TensorOp {
@@ -506,7 +424,5 @@ impl EGraph {
 }
 
 impl Default for EGraph {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }

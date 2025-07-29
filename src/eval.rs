@@ -5,35 +5,20 @@ use crate::graph::Graph;
 use crate::op::{Op, OpKind};
 use crate::tensor::tensor_size;
 
-fn broadcast_arrays<T>(a: &ArrayD<T>, b: &ArrayD<T>) -> (ArrayD<T>, ArrayD<T>) 
-where 
-    T: Clone + Default,
-{
-    // If Shapes Equal, Return Clones
-    if a.shape() == b.shape() {
-        return (a.clone(), b.clone());
-    }
+fn broadcast_arrays<T: Clone + Default>(a: &ArrayD<T>, b: &ArrayD<T>) -> (ArrayD<T>, ArrayD<T>) {
+    if a.shape() == b.shape() { return (a.clone(), b.clone()); }
     
-    // Handle Scalar Broadcasting
     if a.len() == 1 && b.len() > 1 {
-        let scalar_value = a.iter().next().unwrap().clone();
-        let broadcasted_a = ArrayD::from_elem(b.shape(), scalar_value);
-        return (broadcasted_a, b.clone());
+        return (ArrayD::from_elem(b.shape(), a.iter().next().unwrap().clone()), b.clone());
     }
-    
     if b.len() == 1 && a.len() > 1 {
-        let scalar_value = b.iter().next().unwrap().clone();
-        let broadcasted_b = ArrayD::from_elem(a.shape(), scalar_value);
-        return (a.clone(), broadcasted_b);
+        return (a.clone(), ArrayD::from_elem(a.shape(), b.iter().next().unwrap().clone()));
     }
     
-    // If Shapes Different, Broadcast Smaller to Larger
     if a.len() >= b.len() {
-        let broadcasted_b = ArrayD::from_elem(a.shape(), b.iter().next().unwrap_or(&T::default()).clone());
-        (a.clone(), broadcasted_b)
+        (a.clone(), ArrayD::from_elem(a.shape(), b.iter().next().unwrap_or(&T::default()).clone()))
     } else {
-        let broadcasted_a = ArrayD::from_elem(b.shape(), a.iter().next().unwrap_or(&T::default()).clone());
-        (broadcasted_a, b.clone())
+        (ArrayD::from_elem(b.shape(), a.iter().next().unwrap_or(&T::default()).clone()), b.clone())
     }
 }
 
@@ -62,49 +47,28 @@ pub fn eval(graph: &Graph, inputs: &HashMap<String, ArrayD<f32>>) -> Result<Vec<
     }
     for op in &graph.ops {
         let out = match op.kind {
-            OpKind::Add => {
-                let (a_broadcast, b_broadcast) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
-                &a_broadcast + &b_broadcast
-            },
-            OpKind::Mul => {
-                let (a_broadcast, b_broadcast) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
-                &a_broadcast * &b_broadcast
-            },
-            OpKind::SumReduce => {
-                let axis = if !op.attrs.is_empty() { op.attrs[0] as usize } else { 0 };
-                values[op.inputs[0]].sum_axis(Axis(axis))
-            },
-            OpKind::MaxReduce => {
-                let axis = if !op.attrs.is_empty() { op.attrs[0] as usize } else { 0 };
-                values[op.inputs[0]].fold_axis(Axis(axis), f32::NEG_INFINITY, |&a, &b| a.max(b))
-            },
-            OpKind::Reshape => {
-                let new_shape: Vec<usize> = op.attrs.iter().map(|&x| x as usize).collect();
-                values[op.inputs[0]].clone().into_shape(new_shape)?
-            },
-            OpKind::Broadcast => {
-                values[op.inputs[0]].clone()
-            },
+            OpKind::Add => { let (a, b) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]); &a + &b },
+            OpKind::Mul => { let (a, b) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]); &a * &b },
+            OpKind::SumReduce => values[op.inputs[0]].sum_axis(Axis(op.attrs.get(0).map_or(0, |&x| x as usize))),
+            OpKind::MaxReduce => values[op.inputs[0]].fold_axis(Axis(op.attrs.get(0).map_or(0, |&x| x as usize)), f32::NEG_INFINITY, |&a, &b| a.max(b)),
+            OpKind::Reshape => values[op.inputs[0]].clone().into_shape(op.attrs.iter().map(|&x| x as usize).collect::<Vec<_>>())?,
+            OpKind::Broadcast => values[op.inputs[0]].clone(),
             OpKind::Sin => values[op.inputs[0]].mapv(|x| x.sin()),
             OpKind::Sqrt => values[op.inputs[0]].mapv(|x| x.sqrt()),
             OpKind::Recip => values[op.inputs[0]].mapv(|x| 1.0 / x),
             OpKind::Exp => values[op.inputs[0]].mapv(|x| x.exp()),
             OpKind::Log => values[op.inputs[0]].mapv(|x| x.ln()),
             OpKind::Mod => {
-                let (a_broadcast, b_broadcast) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
-                let mut result = a_broadcast.clone();
-                result.zip_mut_with(&b_broadcast, |x, &y| *x = *x % y);
-                result
+                let (mut a, b) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
+                a.zip_mut_with(&b, |x, &y| *x = *x % y);
+                a
             },
             OpKind::LessThan => {
-                let (a_broadcast, b_broadcast) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
-                let mut result = a_broadcast.clone();
-                result.zip_mut_with(&b_broadcast, |x, &y| *x = if *x < y { 1.0 } else { 0.0 });
-                result
+                let (mut a, b) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
+                a.zip_mut_with(&b, |x, &y| *x = if *x < y { 1.0 } else { 0.0 });
+                a
             },
-            OpKind::Constant => {
-                ArrayD::from_elem(vec![], 1.0)
-            },
+            OpKind::Constant => ArrayD::from_elem(vec![], 1.0),
             OpKind::Input(_) => panic!("Input nodes should not appear in evaluation"),
         };
         values.push(out);
@@ -125,65 +89,33 @@ fn eval_mod(graph: &Graph, inputs: &HashMap<String, ArrayD<i64>>, modulus: i64) 
     }
     for op in &graph.ops {
         let out = match op.kind {
-            OpKind::Add => {
-                let a = &values[op.inputs[0]];
-                let b = &values[op.inputs[1]];
-                let (a_broadcast, b_broadcast) = broadcast_arrays(a, b);
-                (&a_broadcast + &b_broadcast).mapv(|x| x % modulus)
-            },
-            OpKind::Mul => {
-                let a = &values[op.inputs[0]];
-                let b = &values[op.inputs[1]];
-                let (a_broadcast, b_broadcast) = broadcast_arrays(a, b);
-                (&a_broadcast * &b_broadcast).mapv(|x| x % modulus)
-            },
-            OpKind::SumReduce => {
-                let axis = if !op.attrs.is_empty() { op.attrs[0] as usize } else { 0 };
-                let result = values[op.inputs[0]].sum_axis(Axis(axis));
-                result.mapv(|x| x % modulus)
-            },
-            OpKind::MaxReduce => {
-                let axis = if !op.attrs.is_empty() { op.attrs[0] as usize } else { 0 };
-                values[op.inputs[0]].fold_axis(Axis(axis), i64::MIN, |&a, &b| (a.max(b)) % modulus)
-            },
+            OpKind::Add => { let (a, b) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]); (&a + &b).mapv(|x| x % modulus) },
+            OpKind::Mul => { let (a, b) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]); (&a * &b).mapv(|x| x % modulus) },
+            OpKind::SumReduce => values[op.inputs[0]].sum_axis(Axis(op.attrs.get(0).map_or(0, |&x| x as usize))).mapv(|x| x % modulus),
+            OpKind::MaxReduce => values[op.inputs[0]].fold_axis(Axis(op.attrs.get(0).map_or(0, |&x| x as usize)), i64::MIN, |&a, &b| (a.max(b)) % modulus),
             OpKind::Reshape => {
                 let new_shape: Vec<usize> = op.attrs.iter().map(|&x| x as usize).collect();
                 let original = &values[op.inputs[0]];
-                let original_size: usize = original.shape().iter().product();
-                let new_size: usize = new_shape.iter().product();
-                
-                if original_size == new_size {
-                    match original.clone().into_shape(new_shape) {
-                        Ok(reshaped) => reshaped,
-                        Err(_) => {
-                            original.clone()
-                        }
-                    }
-                } else {
-                    original.clone()
-                }
+                let same_size = original.shape().iter().product::<usize>() == new_shape.iter().product::<usize>();
+                if same_size { original.clone().into_shape(new_shape).unwrap_or_else(|_| original.clone()) } else { original.clone() }
             },
             OpKind::Broadcast => values[op.inputs[0]].clone(),
-            OpKind::Sin => values[op.inputs[0]].mapv(|x| (x * x) % modulus), 
+            OpKind::Sin => values[op.inputs[0]].mapv(|x| (x * x) % modulus),
             OpKind::Sqrt => values[op.inputs[0]].mapv(|x| x % modulus),
             OpKind::Recip => values[op.inputs[0]].mapv(|x| if x != 0 { 1 } else { 0 }),
             OpKind::Exp => values[op.inputs[0]].mapv(|x| (x * x) % modulus),
             OpKind::Log => values[op.inputs[0]].mapv(|x| x % modulus),
             OpKind::Mod => {
-                let (a_broadcast, b_broadcast) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
-                let mut result = a_broadcast.clone();
-                result.zip_mut_with(&b_broadcast, |x, &y| *x = if y != 0 { (*x % y) % modulus } else { 0 });
-                result
+                let (mut a, b) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
+                a.zip_mut_with(&b, |x, &y| *x = if y != 0 { (*x % y) % modulus } else { 0 });
+                a
             },
             OpKind::LessThan => {
-                let (a_broadcast, b_broadcast) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
-                let mut result = a_broadcast.clone();
-                result.zip_mut_with(&b_broadcast, |x, &y| *x = if *x < y { 1 } else { 0 });
-                result
+                let (mut a, b) = broadcast_arrays(&values[op.inputs[0]], &values[op.inputs[1]]);
+                a.zip_mut_with(&b, |x, &y| *x = if *x < y { 1 } else { 0 });
+                a
             },
-            OpKind::Constant => {
-                ArrayD::from_elem(vec![], 1i64)
-            },
+            OpKind::Constant => ArrayD::from_elem(vec![], 1i64),
             OpKind::Input(_) => panic!("Input nodes should not appear in evaluation"),
         };
         values.push(out);
@@ -218,10 +150,7 @@ pub fn equivalent(g1: &Graph, g2: &Graph, trials: usize) -> bool {
 }
 
 fn eval_mod_safe(graph: &Graph, inputs: &HashMap<String, ArrayD<i64>>, modulus: i64) -> Result<Vec<ArrayD<i64>>, String> {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| eval_mod(graph, inputs, modulus)))
-        .map_err(|_| "Evaluation panicked".to_string())
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| eval_mod(graph, inputs, modulus))).map_err(|_| "Evaluation panicked".to_string())
 }
 
-pub fn total_cost(graph: &Graph) -> usize {
-    graph.ops.iter().map(|op| flop_cost(op, graph)).sum()
-} 
+pub fn total_cost(graph: &Graph) -> usize { graph.ops.iter().map(|op| flop_cost(op, graph)).sum() } 
